@@ -10,7 +10,7 @@ Browser-based calculators by Peter Janus. Each tool is a single self-contained H
 
 ## Using a tool
 
-- **Online:** with GitHub Pages enabled, each tool is at `https://<username>.github.io/engineering-tools/<folder>/`.
+- **Online:** with GitHub Pages enabled, each tool is at `https://pjinfo73git.github.io/calcs/<folder>/`.
 - **Offline:** download the folder's `index.html` and open it in any browser.
 
 ## Changing defaults
