@@ -1,0 +1,358 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Bus Bar Sizing Tool</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<script>
+/* =====================================================================
+   EDITABLE CONFIG BLOCK
+   Change any value below and save the file. These are the permanent
+   defaults that travel with the file. "Reset to Defaults" returns to these.
+   All dimensions in inches, current in amps, weight in lb, cost in $.
+   ===================================================================== */
+const CONFIG = {
+  density: {                 // Current density, A per square inch
+    Copper:   1000,
+    Aluminum: 750
+  },
+  sf: 0.8,                   // Safety factor (ATI method: amps = area x density x 0.8)
+  metalDensity: {            // lb per cubic inch
+    Copper:   0.323,
+    Aluminum: 0.0975
+  },
+  costPerLb: {               // $ per lb (0 = not set)
+    Copper:   0,
+    Aluminum: 0
+  },
+  stockThicknesses: [0.125, 0.1875, 0.25, 0.375, 0.5],   // inches
+  stockWidths: [1,1.5,2,2.5,3,3.5,4,4.5,5,5.5,6,6.5,7,7.5,8], // inches
+  maxBarsPerPhase: 4,
+  holeDiameter: 0.5,         // default mounting hole diameter, inches
+  holesAcrossWidth: 1,       // default number of holes across the bar width
+  voltages: [208, 480, 600], // line-to-line voltages offered (plus Custom)
+  defaultVoltage: 480,
+  defaultPF: 0.85,
+  defaultLoadAmps: 1000,
+  defaultThickness: 0.25,
+  defaultWidth: 6,
+  defaultBars: 1,
+  defaultNeutralPct: 100,
+  defaultLengthFt: 10
+};
+/* ===================== END OF CONFIG BLOCK ========================== */
+</script>
+<style>
+  :root{--bg:#f4f6f8;--card:#fff;--ink:#1d2a35;--muted:#5b6b7a;--line:#d7dee5;--accent:#1f5f8b;--onaccent:#fff;--pass:#1b7f3b;--passbg:#e6f4ea;--fail:#b3261e;--failbg:#fbe9e7;--calc:#eef3f7;--field:#fff;--calcink:#334;--solvebg:#fff8e6;--solveline:#f0d58a}
+  @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#11171c;--card:#1a2229;--ink:#e3eaf0;--muted:#97a6b3;--line:#2f3b46;--accent:#6fb0dc;--onaccent:#0d1418;--pass:#6fd08f;--passbg:#163223;--fail:#f08a80;--failbg:#3a1c19;--calc:#222c35;--field:#121a20;--calcink:#b8c4ce;--solvebg:#2b2616;--solveline:#5e4f22;color-scheme:dark}}
+  :root[data-theme="dark"]{--bg:#11171c;--card:#1a2229;--ink:#e3eaf0;--muted:#97a6b3;--line:#2f3b46;--accent:#6fb0dc;--onaccent:#0d1418;--pass:#6fd08f;--passbg:#163223;--fail:#f08a80;--failbg:#3a1c19;--calc:#222c35;--field:#121a20;--calcink:#b8c4ce;--solvebg:#2b2616;--solveline:#5e4f22;color-scheme:dark}
+  *{box-sizing:border-box}
+  body{margin:0;font:15px/1.4 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg)}
+  header{background:var(--accent);color:var(--onaccent);padding-block:12px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;align-items:center;gap:18px}
+  header h1{margin:0;font-size:20px;font-weight:600}
+  header p{margin:4px 0 0;font-size:13px;opacity:.9;overflow-wrap:anywhere}
+  header>div{min-width:0}
+  main{max-width:1100px;margin:0 auto;padding-block:14px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:820px){main{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px}
+  .card h2{margin:0 0 10px;font-size:15px;text-transform:uppercase;letter-spacing:.04em;color:var(--accent)}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;align-items:center;margin-bottom:8px}
+  .row label{font-size:14px;color:var(--muted)}
+  input,select{width:100%;padding:7px 8px;border:1px solid var(--line);border-radius:5px;font-size:15px;background:var(--field);color:var(--ink)}
+  input:disabled,select:disabled{background:var(--calc);color:var(--calcink);border-style:dashed}
+  .full{grid-column:1/-1}
+  .solve{background:var(--solvebg);border:1px solid var(--solveline);border-radius:6px;padding:8px 10px;margin-bottom:10px}
+  .radios{display:grid;gap:5px}
+  .radios label{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer}
+  .radios input{width:auto;margin:0}
+  .res{display:grid;grid-template-columns:1fr auto;gap:5px 12px;font-size:15px}
+  .res div:nth-child(even){text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+  .verdict{font-size:22px;font-weight:700;padding:10px;border-radius:6px;text-align:center;margin:8px 0}
+  .pass{background:var(--passbg);color:var(--pass)}
+  .fail{background:var(--failbg);color:var(--fail)}
+  .none{background:var(--calc);color:var(--muted)}
+  .note{font-size:12.5px;color:var(--muted);margin-top:8px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{padding:5px 6px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  th{background:var(--calc);position:sticky;top:0}
+  .tblwrap{max-height:360px;overflow:auto;min-width:0}
+  .card{min-width:0}
+  .btns{display:flex;flex-wrap:wrap;gap:8px}
+  button{padding:8px 12px;border:1px solid var(--accent);background:var(--card);color:var(--accent);border-radius:5px;font-size:14px;cursor:pointer}
+  button:hover,button:focus-visible{background:var(--accent);color:var(--onaccent)}
+  .hint{font-size:12px;color:var(--muted)}
+  @media print{
+    body{background:#fff}
+    header{background:#000;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .logo{width:80px;height:54px}
+    main{display:block;max-width:none}
+    .card{break-inside:avoid;margin-bottom:10px;border-color:#999}
+    .btns,.hint,#noteVolt{display:none}
+    .tblwrap{max-height:none;overflow:visible}
+    input,select{border:none;padding:2px;background:#fff!important}
+  }
+</style>
+<header>
+  <div>
+  <h1>Bus Bar Sizing &amp; Estimating Tool</h1>
+  <p style="font-size:14px;opacity:1;font-weight:500">Built by Peter Janus</p>
+  <p class="formula">Rated amps = Thickness × (Width − Holes × Hole dia) × Bars × Density × SF &nbsp;|&nbsp; I = kW×1000 ÷ (√3 × V × PF)</p>
+  </div>
+</header>
+<main>
+
+<section class="card">
+  <h2>Solve For</h2>
+  <div class="solve">
+    <div class="radios" id="solveRadios">
+      <label><input type="radio" name="solveFor" value="rated" checked> Rated amps of the bar (check against load)</label>
+      <label><input type="radio" name="solveFor" value="width"> Minimum width (rounded up to stock)</label>
+      <label><input type="radio" name="solveFor" value="bars"> Minimum bars per phase</label>
+    </div>
+    <div class="hint">The solved field is grayed out and computed from the others.</div>
+  </div>
+
+  <h2>Load</h2>
+  <div class="row">
+    <label>Load entered as</label>
+    <select id="loadMode">
+      <option value="amps">Amps</option>
+      <option value="kw">kW + V + PF</option>
+      <option value="kva">kVA + V</option>
+    </select>
+    <label>Load amps</label><input id="loadAmps" type="number" step="1" min="0">
+    <label>Load kW</label><input id="loadKW" type="number" step="1" min="0">
+    <label>Load kVA</label><input id="loadKVA" type="number" step="1" min="0">
+    <label>Voltage (line-to-line)</label>
+    <select id="voltSel"></select>
+    <label>Custom voltage</label><input id="voltCustom" type="number" step="1" min="1">
+    <label>Power factor</label><input id="pf" type="number" step="0.01" min="0.1" max="1">
+  </div>
+
+  <h2>Bar</h2>
+  <div class="row">
+    <label>Material</label>
+    <select id="material"><option>Copper</option><option>Aluminum</option></select>
+    <label>Safety factor (SF)</label><input id="sf" type="number" step="0.01" min="0.1" max="1.5">
+    <label>Thickness (in)</label><input id="thk" type="number" step="0.0625" min="0.01">
+    <label>Width (in)</label><input id="wid" type="number" step="0.125" min="0.01">
+    <label>Bars per phase</label><input id="bars" type="number" step="1" min="1">
+    <label>Holes across width</label><input id="holes" type="number" step="1" min="0">
+    <label>Hole diameter (in)</label><input id="holeDia" type="number" step="0.0625" min="0">
+    <label>Neutral bar</label>
+    <select id="neutral"><option value="0">None (0%)</option><option value="100">100% of phase</option><option value="200">200% of phase</option></select>
+  </div>
+
+  <h2>Estimate</h2>
+  <div class="row">
+    <label>Bus length per phase (ft)</label><input id="lengthFt" type="number" step="0.5" min="0">
+    <label>Cost per lb ($)</label><input id="costLb" type="number" step="0.01" min="0">
+  </div>
+
+  <div class="btns">
+    <button id="btnReset">Reset to Defaults</button>
+      </div>
+  <div class="hint" id="saveHint"></div>
+</section>
+
+<section class="card">
+  <h2>Results</h2>
+  <div class="verdict none" id="verdict">Enter values</div>
+  <div class="res">
+    <div>Load current</div><div id="rLoadA">—</div>
+    <div>Apparent power (kVA)</div><div id="rKVA">—</div>
+    <div>Real power (kW)</div><div id="rKW">—</div>
+    <div>Required area per phase</div><div id="rReqA">—</div>
+    <div>Bar configuration</div><div id="rConfig">—</div>
+    <div>Gross area per phase</div><div id="rGross">—</div>
+    <div>Net area at holes</div><div id="rNet">—</div>
+    <div>Rated amps</div><div id="rRated">—</div>
+    <div>Margin</div><div id="rMargin">—</div>
+    <div id="solvedLabel" style="font-weight:600;color:var(--accent)">—</div><div id="solvedVal">—</div>
+  </div>
+  <div class="note" id="noteVolt">Voltage does not affect bar size; it sets phase-to-phase and phase-to-ground clearances only.</div>
+
+  <h2 style="margin-top:16px">Material Estimate</h2>
+  <div class="res">
+    <div>Weight per ft per phase</div><div id="eLbFt">—</div>
+    <div>Bars counted (3 phases + neutral)</div><div id="eBars">—</div>
+    <div>Total bus weight</div><div id="eWeight">—</div>
+    <div>Total material cost</div><div id="eCost">—</div>
+  </div>
+  <div class="note" id="alNote" style="display:none">Aluminum: tin-plate all bolted joints to prevent oxidation.</div>
+</section>
+
+<section class="card full" style="grid-column:1/-1">
+  <h2>Alternatives That Pass (stock sizes, holes applied, lightest first)</h2>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>Configuration (per phase)</th><th>Net area (in²)</th><th>Rated amps</th><th>Margin %</th><th>lb/ft per phase</th></tr></thead>
+      <tbody id="altBody"></tbody>
+    </table>
+  </div>
+  <div class="note" id="altNote"></div>
+</section>
+
+</main>
+
+<script>
+(function(){
+  const $ = id => document.getElementById(id);
+  const SQ3 = 1.732;
+  const KEY = 'busbarTool.v1';
+  const fields = ['loadMode','loadAmps','loadKW','loadKVA','voltSel','voltCustom','pf',
+                  'material','sf','thk','wid','bars','holes','holeDia','neutral','lengthFt','costLb'];
+
+  // Populate voltage selector
+  CONFIG.voltages.forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v+' V';$('voltSel').appendChild(o);});
+  const oc=document.createElement('option');oc.value='custom';oc.textContent='Custom';$('voltSel').appendChild(oc);
+
+  function defaults(){
+    return {
+      solveFor:'rated', loadMode:'amps',
+      loadAmps:CONFIG.defaultLoadAmps, loadKW:'', loadKVA:'',
+      voltSel:String(CONFIG.defaultVoltage), voltCustom:'', pf:CONFIG.defaultPF,
+      material:'Copper', sf:CONFIG.sf,
+      thk:CONFIG.defaultThickness, wid:CONFIG.defaultWidth, bars:CONFIG.defaultBars,
+      holes:CONFIG.holesAcrossWidth, holeDia:CONFIG.holeDiameter,
+      neutral:String(CONFIG.defaultNeutralPct), lengthFt:CONFIG.defaultLengthFt,
+      costLb:CONFIG.costPerLb.Copper
+    };
+  }
+  const getSolve = () => (document.querySelector('input[name=solveFor]:checked')||{}).value || 'rated';
+  const setSolve = v => { const r=document.querySelector('input[name=solveFor][value="'+v+'"]'); if(r) r.checked=true; };
+  function setState(s){ fields.forEach(f=>{ if(s[f]!==undefined) $(f).value=s[f]; }); if(s.solveFor) setSolve(s.solveFor); }
+  function getState(){ const s={solveFor:getSolve()}; fields.forEach(f=>s[f]=$(f).value); return s; }
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(getState())); $('saveHint').textContent='Settings saved in this browser.'; }catch(e){ $('saveHint').textContent='Browser storage unavailable; settings will not persist.'; } }
+  function load(){ try{ const s=localStorage.getItem(KEY); if(s){ setState(Object.assign(defaults(),JSON.parse(s))); return; } }catch(e){} setState(defaults()); }
+
+  const num = id => { const v=parseFloat($(id).value); return isNaN(v)?NaN:v; };
+  const roundUp = (x, list) => { for(const v of list){ if(v>=x-1e-9) return v; } return NaN; };
+  const fmt = (x,d=2) => isFinite(x)? x.toLocaleString(undefined,{maximumFractionDigits:d,minimumFractionDigits:0}) : '—';
+  const frac = t => ({0.125:'1/8',0.1875:'3/16',0.25:'1/4',0.375:'3/8',0.5:'1/2'}[t] || t+'');
+
+  function voltage(){ return $('voltSel').value==='custom' ? num('voltCustom') : parseFloat($('voltSel').value); }
+
+  function calc(){
+    const solve=getSolve(), mode=$('loadMode').value;
+    const V=voltage(), PF=num('pf');
+    const mat=$('material').value, dens=CONFIG.density[mat], SF=num('sf');
+    const D=dens*SF;
+    const metalD=CONFIG.metalDensity[mat];
+
+    // Enable/disable fields
+    const loadSolved = solve==='load';
+    $('loadAmps').disabled = loadSolved || mode!=='amps';
+    $('loadKW').disabled   = loadSolved || mode!=='kw';
+    $('loadKVA').disabled  = loadSolved || mode!=='kva';
+    $('pf').disabled = false;
+    $('voltCustom').disabled = $('voltSel').value!=='custom';
+    $('thk').disabled = solve==='thickness';
+    $('wid').disabled = solve==='width';
+    $('bars').disabled = solve==='bars';
+    $('holeDia').disabled = solve==='hole';
+    $('alNote').style.display = mat==='Aluminum'?'block':'none';
+
+    // Load current
+    let I=NaN;
+    if(!loadSolved){
+      if(mode==='amps') I=num('loadAmps');
+      else if(mode==='kw') I=num('loadKW')*1000/(SQ3*V*PF);
+      else I=num('loadKVA')*1000/(SQ3*V);
+    }
+    const reqArea = isFinite(I)? I/D : NaN;
+
+    // Bar variables
+    let T=num('thk'), W=num('wid'), N=num('bars'), H=num('holes')||0, d=num('holeDia')||0;
+    let solvedLabel='—', solvedVal='—';
+
+    if(solve==='width' && isFinite(reqArea)){
+      const w = reqArea/(T*N) + H*d;
+      W = roundUp(w, CONFIG.stockWidths); if(!isFinite(W)) W=Math.ceil(w*2)/2;
+      $('wid').value=W; solvedLabel='Minimum width (stock)'; solvedVal=fmt(W,3)+' in (calc '+fmt(w,3)+')';
+    } else if(solve==='thickness' && isFinite(reqArea)){
+      const t = reqArea/((W-H*d)*N);
+      T = roundUp(t, CONFIG.stockThicknesses); if(!isFinite(T)) T=t;
+      $('thk').value=T; solvedLabel='Minimum thickness (stock)'; solvedVal=frac(T)+' in (calc '+fmt(t,3)+')';
+    } else if(solve==='bars' && isFinite(reqArea)){
+      N = Math.max(1, Math.ceil(reqArea/(T*(W-H*d)) - 1e-9));
+      $('bars').value=N; solvedLabel='Minimum bars per phase'; solvedVal=N+(N>CONFIG.maxBarsPerPhase?' (exceeds max '+CONFIG.maxBarsPerPhase+')':'');
+    } else if(solve==='hole' && isFinite(reqArea)){
+      d = H>0 ? (W - reqArea/(T*N))/H : NaN;
+      $('holeDia').value = isFinite(d)? Math.max(0,Math.floor(d*16)/16) : '';
+      solvedLabel='Max hole diameter'; solvedVal = isFinite(d) ? (d<=0?'none fits':fmt(d,3)+' in (≈'+fmt(Math.floor(d*16)/16,4)+' stock)') : 'set holes > 0';
+    }
+
+    const gross = T*W*N;
+    const net   = T*(W-H*d)*N;
+    const rated = net*D;
+
+    if(solve==='load'){
+      I = rated;
+      const kVA=SQ3*V*I/1000, kW=kVA*PF;
+      $('loadAmps').value=Math.floor(I); $('loadKVA').value=Math.floor(kVA); $('loadKW').value=Math.floor(kW);
+      solvedLabel='Max load'; solvedVal=fmt(I,0)+' A / '+fmt(kW,0)+' kW';
+    }
+
+    const kVA = isFinite(I)&&isFinite(V)? SQ3*V*I/1000 : NaN;
+    const kW  = kVA*PF;
+
+    // Results
+    $('rLoadA').textContent=fmt(I,0)+(isFinite(I)?' A':'');
+    $('rKVA').textContent=fmt(kVA,0);
+    $('rKW').textContent=fmt(kW,0);
+    $('rReqA').textContent=isFinite(I)?fmt(I/D,3)+' in²':'—';
+    $('rConfig').textContent=N+' × '+frac(T)+'″ × '+fmt(W,3)+'″ '+mat;
+    $('rGross').textContent=fmt(gross,3)+' in²';
+    $('rNet').textContent=fmt(net,3)+' in²'+(H>0&&d>0?' ('+H+' × '+fmt(d,3)+'″ hole)':'');
+    $('rRated').textContent=fmt(rated,0)+' A';
+    $('solvedLabel').textContent=solvedLabel; $('solvedVal').textContent=solvedVal;
+
+    const v=$('verdict');
+    if(isFinite(I)&&isFinite(rated)&&I>0){
+      const mA=rated-I, mIn=net-I/D;
+      if(mA>=-1e-6){ v.className='verdict pass'; v.textContent='PASS — '+fmt(rated,0)+' A rated vs '+fmt(I,0)+' A load'; }
+      else { v.className='verdict fail'; v.textContent='FAIL — '+fmt(rated,0)+' A rated vs '+fmt(I,0)+' A load'; }
+      $('rMargin').textContent=(mA>=0?'+':'')+fmt(mA,0)+' A ('+(mIn>=0?'+':'')+fmt(mIn,3)+' in², '+fmt(100*mA/I,1)+'%)';
+    } else { v.className='verdict none'; v.textContent='Enter a load and bar size'; $('rMargin').textContent='—'; }
+
+    // Estimate
+    const L=num('lengthFt'), cost=num('costLb');
+    const lbFt=gross*12*metalD;
+    const barsCount=3+parseFloat($('neutral').value)/100;
+    const totalW=lbFt*barsCount*L;
+    $('eLbFt').textContent=fmt(lbFt,2)+' lb/ft';
+    $('eBars').textContent=fmt(barsCount,1)+' phase-equivalents × '+fmt(L,1)+' ft';
+    $('eWeight').textContent=fmt(totalW,1)+' lb';
+    $('eCost').textContent=(isFinite(cost)&&cost>0)? '$'+fmt(totalW*cost,2) : 'set cost per lb';
+
+    // Alternatives
+    const tb=$('altBody'); tb.innerHTML='';
+    if(isFinite(I)&&I>0){
+      const rows=[];
+      for(const t of CONFIG.stockThicknesses) for(const w of CONFIG.stockWidths) for(let n=1;n<=CONFIG.maxBarsPerPhase;n++){
+        const na=t*(w-H*d)*n; if(na<=0) continue;
+        const ra=na*D; if(ra<I) continue;
+        rows.push({t,w,n,na,ra,m:100*(ra-I)/I,lb:t*w*n*12*metalD});
+      }
+      rows.sort((a,b)=>a.lb-b.lb||a.n-b.n);
+      rows.slice(0,40).forEach(r=>{
+        const tr=document.createElement('tr');
+        tr.innerHTML='<td>'+r.n+' × '+frac(r.t)+'″ × '+fmt(r.w,2)+'″</td><td>'+fmt(r.na,3)+'</td><td>'+fmt(r.ra,0)+'</td><td>'+fmt(r.m,1)+'%</td><td>'+fmt(r.lb,2)+'</td>';
+        tb.appendChild(tr);
+      });
+      $('altNote').textContent=rows.length? rows.length+' passing combinations'+(rows.length>40?' (showing lightest 40)':'')+'. Holes applied: '+H+' × '+fmt(d,3)+'″.' : 'No stock combination passes within '+CONFIG.maxBarsPerPhase+' bars per phase.';
+    } else $('altNote').textContent='Enter a load to list alternatives.';
+  }
+
+  function onChange(){ calc(); save(); }
+  fields.forEach(f=>{ $(f).addEventListener('input',onChange); $(f).addEventListener('change',onChange); });
+  document.querySelectorAll('input[name=solveFor]').forEach(r=>r.addEventListener('change',onChange));
+
+  $('btnReset').onclick=()=>{ setState(defaults()); try{localStorage.removeItem(KEY);}catch(e){} calc(); $('saveHint').textContent='Reset to file defaults.'; };
+  $('material').addEventListener('change',()=>{ const c=CONFIG.costPerLb[$('material').value]; if(c) $('costLb').value=c; });
+
+  load(); calc();
+})();
+</script>
+
+
+</body></html>
